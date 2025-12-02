@@ -7,10 +7,10 @@ dotenv.config();
 
 
 const s3Client = new S3Client({
-  region: 'ap-south-1',
+  region: process.env.AWS_REGION,
   credentials: {
-    accessKeyId: 'AKIARU7GPCYC7FUUID3N',
-    secretAccessKey: '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',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
   forcePathStyle: false, // Use virtual-hosted-style URLs
   useAccelerateEndpoint: false,
