@@ -1,13 +1,25 @@
 import { createServer } from "http";
-import { getAllCategories, addCategory, updateCategory, deleteCategory, addSubCategory, updateSubCategory, deleteSubCategory, addMenuItem, updateMenuItem, deleteMenuItem } from "./controllers/menu-itlu/menu.itlu.controller.js";
+import {
+  getAllCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory,
+  addSubCategory,
+  updateSubCategory,
+  deleteSubCategory,
+  addMenuItem,
+  updateMenuItem,
+  deleteMenuItem,
+} from "./controllers/menu-itlu/menu.itlu.controller.js";
+import { upload } from "./config/s3config.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 async function registerRoutes(app) {
-
-
-
-
-
- app.get("/categories", getAllCategories);
+  // ----------------------
+  // CATEGORY ROUTES
+  // ----------------------
+  app.get("/categories", getAllCategories);
   app.post("/categories", addCategory);
   app.put("/categories/:categoryId", updateCategory);
   app.delete("/categories/:categoryId", deleteCategory);
@@ -15,10 +27,7 @@ async function registerRoutes(app) {
   // ----------------------
   // SUBCATEGORY ROUTES
   // ----------------------
-  app.post(
-    "/categories/:categoryId/subcategories",
-    addSubCategory
-  );
+  app.post("/categories/:categoryId/subcategories", addSubCategory);
 
   app.put(
     "/categories/:categoryId/subcategories/:subCategoryId",
@@ -31,15 +40,17 @@ async function registerRoutes(app) {
   );
 
   // ----------------------
-  // MENU ITEM ROUTES
+  // MENU ITEM ROUTES (WITH IMAGE UPLOAD)
   // ----------------------
   app.post(
     "/categories/:categoryId/subcategories/:subCategoryId/items",
+    upload.single("image"), // Multer middleware for single file upload
     addMenuItem
   );
 
   app.put(
     "/categories/:categoryId/subcategories/:subCategoryId/items/:itemId",
+    upload.single("image"), // Image is optional for updates
     updateMenuItem
   );
 
@@ -47,14 +58,6 @@ async function registerRoutes(app) {
     "/categories/:categoryId/subcategories/:subCategoryId/items/:itemId",
     deleteMenuItem
   );
-
-
-
-
-
-
-
-
 
   const httpServer = createServer(app);
   return httpServer;
