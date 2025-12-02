@@ -1,3 +1,4 @@
+import { deleteImageFromS3 } from "../../config/s3utils.js";
 import { MenuCategory } from "../../models/menu-itlu/schema.js";
 
 export const getAllCategories = async (req, res) => {
@@ -55,8 +56,8 @@ export const updateSubCategory = async (req, res) => {
     {
       $set: {
         "subCategories.$.name": update.name,
-        "subCategories.$.id": update.id
-      }
+        "subCategories.$.id": update.id,
+      },
     },
     { new: true }
   );
@@ -77,57 +78,131 @@ export const deleteSubCategory = async (req, res) => {
 };
 
 // ------------------------------
-// MENU ITEM CONTROLLERS
+// MENU ITEM CONTROLLERS (WITH S3)
 // ------------------------------
 
 export const addMenuItem = async (req, res) => {
-  const { categoryId, subCategoryId } = req.params;
+  try {
+    const { categoryId, subCategoryId } = req.params;
 
-  const updated = await MenuCategory.findOneAndUpdate(
-    { id: categoryId, "subCategories.id": subCategoryId },
-    { $push: { "subCategories.$.items": req.body } },
-    { new: true }
-  );
+    // Get image URL from uploaded file (if exists)
+    const imageUrl = req.file ? req.file.location : "";
 
-  res.json(updated);
+    const itemData = {
+      ...req.body,
+      image: imageUrl,
+    };
+
+    const updated = await MenuCategory.findOneAndUpdate(
+      { id: categoryId, "subCategories.id": subCategoryId },
+      { $push: { "subCategories.$.items": itemData } },
+      { new: true }
+    );
+
+    res.json(updated);
+  } catch (error) {
+    console.error("Error adding menu item:", error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const updateMenuItem = async (req, res) => {
-  const { categoryId, subCategoryId, itemId } = req.params;
+  try {
+    const { categoryId, subCategoryId, itemId } = req.params;
 
-  const updated = await MenuCategory.findOneAndUpdate(
-    {
+    // Find existing item to get old image URL
+    const category = await MenuCategory.findOne({
       id: categoryId,
       "subCategories.id": subCategoryId,
-      "subCategories.items.id": itemId
-    },
-    {
-      $set: {
-        "subCategories.$[sc].items.$[it]": req.body
-      }
-    },
-    {
-      new: true,
-      arrayFilters: [
-        { "sc.id": subCategoryId },
-        { "it.id": itemId }
-      ]
-    }
-  );
+    });
 
-  res.json(updated);
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    const subCategory = category.subCategories.find(
+      (sc) => sc.id === subCategoryId
+    );
+    const existingItem = subCategory?.items.find((item) => item.id === itemId);
+
+    // Handle image update
+    let imageUrl = existingItem?.image || "";
+
+    if (req.file) {
+      // New image uploaded
+      imageUrl = req.file.location;
+
+      // Delete old image from S3 if exists
+      if (existingItem?.image) {
+        await deleteImageFromS3(existingItem.image);
+      }
+    } else if (req.body.image !== undefined) {
+      // Image URL provided in body (or explicitly set to empty)
+      imageUrl = req.body.image;
+    }
+
+    const updateData = {
+      ...req.body,
+      image: imageUrl,
+    };
+
+    const updated = await MenuCategory.findOneAndUpdate(
+      {
+        id: categoryId,
+        "subCategories.id": subCategoryId,
+        "subCategories.items.id": itemId,
+      },
+      {
+        $set: {
+          "subCategories.$[sc].items.$[it]": updateData,
+        },
+      },
+      {
+        new: true,
+        arrayFilters: [{ "sc.id": subCategoryId }, { "it.id": itemId }],
+      }
+    );
+
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating menu item:", error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const deleteMenuItem = async (req, res) => {
-  const { categoryId, subCategoryId, itemId } = req.params;
+  try {
+    const { categoryId, subCategoryId, itemId } = req.params;
 
-  const updated = await MenuCategory.findOneAndUpdate(
-    { id: categoryId, "subCategories.id": subCategoryId },
-    {
-      $pull: { "subCategories.$.items": { id: itemId } }
-    },
-    { new: true }
-  );
+    // Find the item first to get image URL
+    const category = await MenuCategory.findOne({
+      id: categoryId,
+      "subCategories.id": subCategoryId,
+    });
 
-  res.json(updated);
+    if (category) {
+      const subCategory = category.subCategories.find(
+        (sc) => sc.id === subCategoryId
+      );
+      const item = subCategory?.items.find((item) => item.id === itemId);
+
+      // Delete image from S3 if exists
+      if (item?.image) {
+        await deleteImageFromS3(item.image);
+      }
+    }
+
+    const updated = await MenuCategory.findOneAndUpdate(
+      { id: categoryId, "subCategories.id": subCategoryId },
+      {
+        $pull: { "subCategories.$.items": { id: itemId } },
+      },
+      { new: true }
+    );
+
+    res.json(updated);
+  } catch (error) {
+    console.error("Error deleting menu item:", error);
+    res.status(500).json({ message: error.message });
+  }
 };
